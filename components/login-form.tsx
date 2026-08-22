@@ -18,8 +18,10 @@ import { useState } from "react";
 
 export function LoginForm({
   className,
+  /** True only while the instance has no accounts yet (bootstrap). */
+  canSignUp = false,
   ...props
-}: React.ComponentPropsWithoutRef<"div">) {
+}: React.ComponentPropsWithoutRef<"div"> & { canSignUp?: boolean }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -93,14 +95,20 @@ export function LoginForm({
                 {isLoading ? "Logging in..." : "Login"}
               </Button>
             </div>
-            <div className="mt-4 text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/auth/sign-up"
-                className="underline underline-offset-4"
-              >
-                Sign up
-              </Link>
+            <div className="mt-4 text-center text-sm text-muted-foreground">
+              {canSignUp ? (
+                <>
+                  No accounts yet?{" "}
+                  <Link
+                    href="/auth/sign-up"
+                    className="underline underline-offset-4"
+                  >
+                    Create the first one
+                  </Link>
+                </>
+              ) : (
+                "Accounts are created by an administrator."
+              )}
             </div>
           </form>
         </CardContent>

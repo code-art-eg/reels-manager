@@ -97,7 +97,7 @@ async function main() {
 
   const admin = await get("/admin/users");
   ok("/admin/users renders for an admin", admin.status === 200, `HTTP ${admin.status}`);
-  ok("admin page lists the invite form", admin.body.includes("Invite a team member"));
+  ok("admin page lists the add-member form", admin.body.includes("Add a team member"));
   ok("admin page lists the test user", admin.body.includes(EMAIL));
   ok(
     "admin page is not showing the misconfiguration warning",

@@ -51,6 +51,10 @@ async function main() {
     email,
     password,
     email_confirm: true,
+    // Marks this as an admin-initiated account. The signup trigger refuses
+    // self-service sign-ups once the instance has users; app_metadata cannot be
+    // set through the public endpoint, so it is a safe signal.
+    app_metadata: { created_by_admin: true },
   });
   if (error) throw error;
 

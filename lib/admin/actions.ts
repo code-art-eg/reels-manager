@@ -8,7 +8,13 @@ import type { AppRole } from "@/lib/types";
 /** Result of an action invoked directly (not through useActionState). */
 export type AdminResult =
   | { status: "error"; message: string }
-  | { status: "success"; message: string };
+  | {
+      status: "success";
+      message: string;
+      /** One-time set-password link, shown so the admin can pass it on. */
+      inviteLink?: string;
+      inviteEmail?: string;
+    };
 
 /** Form-action state, which starts out empty. */
 export type AdminActionState = { status: "idle" } | AdminResult;
@@ -17,7 +23,19 @@ function isRole(value: unknown): value is AppRole {
   return value === "admin" || value === "member";
 }
 
-/** Invites a new team member by email. They set their own password via the link. */
+/**
+ * Adds a team member. Self-service sign-up is closed, so this is the only way
+ * accounts are created.
+ *
+ * Deliberately not `inviteUserByEmail`: that inserts the auth row *before*
+ * stamping `invited_at`, so the signup trigger cannot tell it apart from a
+ * public sign-up and rejects it. `createUser` can carry an `app_metadata` flag,
+ * which clients cannot set through the public endpoint, so the trigger trusts it.
+ *
+ * The account is created without a password and a one-time set-password link is
+ * returned for the admin to pass on. That keeps invitations working even when no
+ * custom SMTP is configured (Supabase's built-in mailer is heavily rate limited).
+ */
 export async function inviteUser(
   _prev: AdminActionState,
   formData: FormData,
@@ -47,20 +65,24 @@ export async function inviteUser(
     };
   }
 
-  const redirectTo = process.env.NEXT_PUBLIC_SITE_URL
-    ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/update-password`
-    : undefined;
-
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: fullName ? { full_name: fullName } : undefined,
-    redirectTo,
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: fullName ? { full_name: fullName } : undefined,
+    app_metadata: { created_by_admin: true },
   });
 
   if (error) {
-    return { status: "error", message: `Could not invite ${email}: ${error.message}` };
+    const already = /already|registered|exists/i.test(error.message);
+    return {
+      status: "error",
+      message: already
+        ? `${email} already has an account.`
+        : `Could not add ${email}: ${error.message}`,
+    };
   }
 
-  // The signup trigger creates the profile as a member; apply the chosen role.
+  // The signup trigger provisions the profile as a member; apply the chosen role.
   if (data.user && role !== "member") {
     const { error: roleError } = await admin
       .from("profiles")
@@ -69,13 +91,39 @@ export async function inviteUser(
     if (roleError) {
       return {
         status: "error",
-        message: `Invited ${email}, but could not set their role: ${roleError.message}`,
+        message: `Added ${email}, but could not set their role: ${roleError.message}`,
       };
     }
   }
 
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "";
+  const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: siteUrl
+      ? { redirectTo: `${siteUrl}/auth/update-password` }
+      : undefined,
+  });
+
   revalidatePath("/admin/users");
-  return { status: "success", message: `Invitation sent to ${email}.` };
+
+  if (linkError || !link?.properties?.action_link) {
+    return {
+      status: "success",
+      message:
+        `Added ${email}, but the set-password link could not be generated ` +
+        `(${linkError?.message ?? "unknown error"}). They can use ` +
+        `"Forgot your password?" on the sign-in page instead.`,
+    };
+  }
+
+  return {
+    status: "success",
+    message: `Added ${email}.`,
+    inviteLink: link.properties.action_link,
+    inviteEmail: email,
+  };
 }
 
 export async function setUserRole(

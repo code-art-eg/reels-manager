@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Skill Files" pattern="file[reels-manager]:.agents//*||file[reels-manager]:.claude//*" />
+</component>

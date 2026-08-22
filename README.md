@@ -61,21 +61,37 @@ Ad-hoc queries:
 node scripts/db.mjs query "select count(*) from clips"
 ```
 
-### 3. First user
+### 3. Accounts
 
-The **first** account created in a fresh project is promoted to `admin`
-automatically; everyone after that starts as `member`. To create it without the
-email round-trip:
+The library is **invite only**. There is exactly one exception: while the
+instance has *no* accounts at all, `/auth/sign-up` offers a one-time bootstrap
+form, and the account it creates becomes the `admin`. As soon as any account
+exists that page shows "Sign-up is closed" and the login page stops linking to
+it.
+
+Everyone else is added by an admin from **Users** in the app. That creates the
+account and shows a **one-time set-password link** to pass on — links are shown
+rather than emailed because Supabase's built-in mailer is heavily rate limited
+and restricted to project members. Configure custom SMTP if you would rather it
+send email (the user can also just use "Forgot your password?").
+
+There is also a CLI route, useful for the very first admin:
 
 ```sh
 pnpm tsx scripts/create-user.ts you@example.com 'a-strong-password' admin
 ```
 
-After that, invite the rest of the team from **Users** in the app.
-
-> Public sign-up at `/auth/sign-up` is still enabled so the app can be
-> bootstrapped. Once your admin exists, consider disabling email signups in
-> Supabase → Authentication → Providers so the library stays invite-only.
+> **Required for invite-only to actually hold:** turn **off**
+> Supabase → Authentication → Sign In / Providers → Email →
+> *"Allow new users to sign up"*. Until that is off, anyone holding the
+> publishable key can self-register by calling the auth endpoint directly,
+> bypassing the UI. Both the bootstrap form and the admin add-member form go
+> through the admin API, so they keep working with it disabled.
+>
+> Blocking self-service sign-up in a database trigger does *not* work, and was
+> tried and reverted (see `supabase/migrations/20260822000900_*`): GoTrue inserts
+> the `auth.users` row before applying `invited_at` / `app_metadata`, so at
+> INSERT time an admin-created account is indistinguishable from a public one.
 
 ### 4. Run
 
@@ -114,6 +130,7 @@ working with no code change.
 | Reads (search, facets, one clip) | `lib/clips/queries.ts` |
 | URL ⇄ filter state | `lib/clips/search-params.ts` |
 | Auth + role helpers | `lib/auth.ts` |
+| First-admin bootstrap | `lib/bootstrap.ts`, `lib/signup.ts` |
 | User management actions | `lib/admin/actions.ts` |
 | Schema, RLS, functions | `supabase/migrations/` |
 

@@ -99,25 +99,53 @@ pnpm tsx scripts/create-user.ts you@example.com 'a-strong-password' admin
 pnpm dev
 ```
 
-## Instagram thumbnails
+## How thumbnails and validation work
 
-TikTok works out of the box: its oEmbed endpoint is public, confirms the video
-exists, and returns a thumbnail. It rate-limits per IP, so lookups retry briefly.
+**TikTok** uses its public oEmbed endpoint, which confirms the video exists and
+returns a thumbnail. No credentials needed. It rate-limits per IP, so lookups
+retry briefly before giving up.
 
-Instagram is different, and worth knowing about:
+**Instagram** takes two attempts, in this order:
 
-- Fetching a reel page server-side returns a JavaScript shell with **no**
-  `og:image`, and answers HTTP 200 even for reels that do not exist — so
-  scraping can neither thumbnail nor validate.
-- The official route is Meta's `instagram_oembed`, but Meta gates the
-  **oEmbed Read** feature behind **App Review**. Until an app is approved the
-  endpoint returns error code 10 for everyone.
+1. **Meta's `instagram_oembed`** — the official route. Used when `META_APP_ID`
+   and `META_CLIENT_TOKEN` are set *and* the app is approved for the **oEmbed
+   Read** feature. Meta gates that behind App Review, so an unapproved app gets
+   error code 10 and this attempt is skipped.
+2. **Instagram's own embed page** — `/reel/<code>/embed/captioned/`. Requested
+   with a plain (non-browser) user agent, this is server rendered and contains an
+   `EmbeddedMediaImage` tag with the real thumbnail, plus the handle and caption.
+   A reel that does not exist renders the same page *without* that tag, so this
+   doubles as the existence check.
 
-So the app degrades honestly: an Instagram clip still saves, keeps its reference
-id, tags and notes, and renders a branded placeholder tile instead of a
-thumbnail — and the save message says the link could not be verified. Once your
-Meta app passes App Review for oEmbed Read, thumbnails and real validation start
-working with no code change.
+Two Instagram details that make the naive approaches fail, and are worth knowing
+before "simplifying" this:
+
+- The ordinary reel page is a JavaScript shell with no `og:image`, and answers
+  HTTP 200 even for reels that do not exist — so it can neither thumbnail nor
+  validate.
+- The embed page only helps with a *plain* user agent. Send a browser user agent
+  and Instagram returns the client-rendered shell instead, with no image.
+
+If Meta later approves your app for oEmbed Read, step 1 starts succeeding and
+takes over automatically — no code change.
+
+Step 2 is scraping, so it can break if Instagram changes that markup. When
+neither step yields an image the clip is refused with "could not find that reel"
+rather than saved unverified; if the provider is unreachable altogether the clip
+saves with a placeholder and a warning.
+
+### Backfilling
+
+Clips saved while a lookup was failing keep their reference id but have no
+thumbnail. To fill them in later:
+
+```sh
+pnpm tsx scripts/backfill-thumbnails.ts --dry-run   # report only
+pnpm tsx scripts/backfill-thumbnails.ts            # fill them in
+```
+
+It only touches clips with no thumbnail, and fills `title`/`author_name` only
+where they are empty.
 
 ## Architecture notes
 
@@ -160,11 +188,12 @@ These are executable scripts rather than a test runner. Run them with the dev
 server up:
 
 ```sh
-pnpm tsx scripts/check-e2e.ts               # schema, RLS, roles, cascades
-pnpm tsx scripts/check-pages.ts             # every page renders, auth gates hold
-pnpm tsx scripts/check-add-flow.ts          # real URL -> verify -> thumbnail -> serve
-pnpm tsx scripts/check-instagram-fallback.ts# Instagram degrades without oEmbed
-pnpm tsx scripts/check-lookup.ts <url>      # inspect one link's pipeline
+pnpm tsx scripts/check-e2e.ts           # schema, RLS, roles, cascades
+pnpm tsx scripts/check-pages.ts         # every page renders, auth gates hold
+pnpm tsx scripts/check-add-flow.ts      # real URL -> verify -> thumbnail -> serve
+pnpm tsx scripts/check-browse.ts        # paging, ordering, tag filters
+pnpm tsx scripts/check-instagram.ts     # Instagram thumbnail + rejects fake reels
+pnpm tsx scripts/check-lookup.ts <url>  # inspect one link's pipeline
 ```
 
 `check-e2e.ts` and `check-add-flow.ts` create and remove their own fixtures.

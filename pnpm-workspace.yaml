@@ -1,2 +1,6 @@
 allowBuilds:
+  # esbuild backs `tsx`, used by the scripts/ helpers.
+  esbuild: true
   unrs-resolver: true
+  # sharp resizes provider thumbnails before they are stored.
+  sharp: true

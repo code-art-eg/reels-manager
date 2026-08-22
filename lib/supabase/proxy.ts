@@ -46,16 +46,30 @@ export async function updateSession(request: NextRequest) {
   // with the Supabase client, your users may be randomly logged out.
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
+  const { pathname } = request.nextUrl;
 
-  if (
-    request.nextUrl.pathname !== "/" &&
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
-  ) {
+  // The app has no marketing page: send the root at the library, which then
+  // falls through to the auth check below when nobody is signed in.
+  if (pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/library" : "/auth/login";
+    return NextResponse.redirect(url);
+  }
+
+  if (!user && !pathname.startsWith("/auth")) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Signed-in users have no reason to see the login/signup screens.
+  if (
+    user &&
+    (pathname === "/auth/login" || pathname === "/auth/sign-up")
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/library";
     return NextResponse.redirect(url);
   }
 

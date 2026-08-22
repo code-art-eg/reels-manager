@@ -5,9 +5,9 @@
 //
 // Safe to re-run: only clips with no thumbnail row are touched.
 import { createClient } from "@supabase/supabase-js";
-import { parseClipUrl } from "../lib/clips/platform";
-import { ClipLookupError, lookupClipMetadata } from "../lib/clips/oembed";
-import { buildThumbnail } from "../lib/clips/thumbnail";
+import { parseClipUrl } from "@/lib/clips/platform";
+import { ClipLookupError, lookupClipMetadata } from "@/lib/clips/oembed";
+import { buildThumbnail } from "@/lib/clips/thumbnail";
 
 const dryRun = process.argv.includes("--dry-run");
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -82,7 +82,10 @@ async function main() {
         p_width: thumb.width,
         p_height: thumb.height,
       });
-      if (writeError) throw new Error(writeError.message);
+      if (writeError) {
+        // noinspection ExceptionCaughtLocallyJS
+        throw new Error(writeError.message);
+      }
 
       // Fill metadata gaps too, without overwriting anything already set.
       const patch: Record<string, string> = {};

@@ -4,9 +4,9 @@
 //
 //   pnpm tsx scripts/check-instagram.ts [reelUrl]
 import { createClient } from "@supabase/supabase-js";
-import { parseClipUrl } from "../lib/clips/platform";
-import { ClipLookupError, lookupClipMetadata } from "../lib/clips/oembed";
-import { buildThumbnail } from "../lib/clips/thumbnail";
+import { parseClipUrl } from "@/lib/clips/platform";
+import { ClipLookupError, lookupClipMetadata } from "@/lib/clips/oembed";
+import { buildThumbnail } from "@/lib/clips/thumbnail";
 
 const REAL =
   process.argv[2] ?? "https://www.instagram.com/reel/DbaV0XdMySK/";
